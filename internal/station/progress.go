@@ -27,10 +27,19 @@ func (s *Service) LogProgress(
 		if !ok {
 			return notFoundSpecimen(plan.SpecimenID)
 		}
+		admission, ok := m.GetAdmission(planID)
+		if !ok {
+			return contracts.Conflict("plan_admission_missing", "当前方案没有可用的准入事实")
+		}
+		if err := admission.BeginAttempt(); err != nil {
+			return err
+		}
+		m.DeferAdmission(admission)
 		previous := m.ProgressForPlan(planID)
 		entry, err := domain.NewProgressEntry(
 			s.nextID("progress"),
 			plan,
+			admission,
 			previous,
 			request.Stage,
 			request.Percent,
@@ -39,6 +48,8 @@ func (s *Service) LogProgress(
 			s.now(),
 		)
 		if err != nil {
+			admission.ConsumeAttempt()
+			m.DeferAdmission(admission)
 			return err
 		}
 		if plan.Status == domain.PlanApproved {
@@ -55,6 +66,8 @@ func (s *Service) LogProgress(
 			}
 		}
 		m.AppendProgress(entry)
+		admission.CompleteAttempt(entry.Sequence, entry.Percent)
+		m.PutAdmission(admission)
 		m.PutPlan(plan)
 		m.PutSpecimen(specimen)
 		created = entry

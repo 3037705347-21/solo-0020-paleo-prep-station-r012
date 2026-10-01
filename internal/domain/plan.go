@@ -31,6 +31,61 @@ type PrepPlan struct {
 	UpdatedAt      time.Time  `json:"updated_at"`
 }
 
+type PlanAdmission struct {
+	PlanID      string
+	SpecimenID  string
+	Approved    bool
+	AttemptOpen bool
+	Consumed    bool
+	Sequence    int
+	LastPercent int
+	Version     int
+}
+
+func NewPlanAdmission(plan PrepPlan, approved bool) PlanAdmission {
+	return PlanAdmission{
+		PlanID:     plan.ID,
+		SpecimenID: plan.SpecimenID,
+		Approved:   approved,
+		Version:    1,
+	}
+}
+
+func (a PlanAdmission) AllowsProgress(plan PrepPlan) bool {
+	if a.Consumed || !a.Approved {
+		return false
+	}
+	return plan.Status == PlanDraft ||
+		plan.Status == PlanApproved ||
+		plan.Status == PlanActive
+}
+
+func (a *PlanAdmission) BeginAttempt() error {
+	if a.Consumed {
+		return contracts.Conflict("plan_admission_consumed", "当前方案的准入已经被使用，不能继续记录进度")
+	}
+	if a.AttemptOpen {
+		return contracts.Conflict("plan_admission_busy", "当前方案已有进度尝试正在处理")
+	}
+	a.AttemptOpen = true
+	a.Version++
+	return nil
+}
+
+func (a *PlanAdmission) CompleteAttempt(sequence int, percent int) {
+	a.AttemptOpen = false
+	a.Consumed = false
+	a.Sequence = sequence
+	a.LastPercent = percent
+	a.Version++
+}
+
+func (a *PlanAdmission) ConsumeAttempt() {
+	a.AttemptOpen = false
+	a.Consumed = true
+	a.Version++
+}
+
 func NewPrepPlan(
 	id string,
 	specimen Specimen,

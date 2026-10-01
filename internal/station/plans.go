@@ -38,10 +38,12 @@ func (s *Service) CreatePlan(
 		if err != nil {
 			return err
 		}
+		admission := domain.NewPlanAdmission(plan, true)
 		if err := specimen.MarkPlanned(s.now()); err != nil {
 			return err
 		}
 		m.PutPlan(plan)
+		m.PutAdmission(admission)
 		m.PutSpecimen(specimen)
 		created = plan
 		return nil
@@ -71,10 +73,18 @@ func (s *Service) ApprovePlan(
 		if err := plan.Approve(request.ApprovedBy, s.now()); err != nil {
 			return err
 		}
-		if err := specimen.MarkPreparing(s.now()); err != nil {
-			return err
+		admission, ok := m.GetAdmission(planID)
+		if !ok {
+			admission = domain.NewPlanAdmission(plan, true)
+		}
+		admission.Approved = true
+		if len(m.ProgressForPlan(planID)) == 0 {
+			if err := specimen.MarkPreparing(s.now()); err != nil {
+				return err
+			}
 		}
 		m.PutPlan(plan)
+		m.PutAdmission(admission)
 		m.PutSpecimen(specimen)
 		approved = plan
 		return nil

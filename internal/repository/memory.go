@@ -8,10 +8,11 @@ import (
 )
 
 type state struct {
-	specimens map[string]domain.Specimen
-	plans     map[string]domain.PrepPlan
-	progress  map[string][]domain.ProgressEntry
-	releases  map[string]domain.ReleaseRecord
+	specimens  map[string]domain.Specimen
+	plans      map[string]domain.PrepPlan
+	admissions map[string]domain.PlanAdmission
+	progress   map[string][]domain.ProgressEntry
+	releases   map[string]domain.ReleaseRecord
 }
 
 type MemoryRepository struct {
@@ -22,10 +23,11 @@ type MemoryRepository struct {
 func NewMemory() *MemoryRepository {
 	return &MemoryRepository{
 		state: state{
-			specimens: make(map[string]domain.Specimen),
-			plans:     make(map[string]domain.PrepPlan),
-			progress:  make(map[string][]domain.ProgressEntry),
-			releases:  make(map[string]domain.ReleaseRecord),
+			specimens:  make(map[string]domain.Specimen),
+			plans:      make(map[string]domain.PrepPlan),
+			admissions: make(map[string]domain.PlanAdmission),
+			progress:   make(map[string][]domain.ProgressEntry),
+			releases:   make(map[string]domain.ReleaseRecord),
 		},
 	}
 }
@@ -42,6 +44,9 @@ func (r *MemoryRepository) Mutate(fn func(*Mutation) error) error {
 
 	tx := cloneMutation(r.state)
 	if err := fn(tx); err != nil {
+		for key, value := range tx.deferredAdmissions {
+			r.state.admissions[key] = value
+		}
 		return err
 	}
 	r.state = tx.snapshot()
@@ -50,10 +55,11 @@ func (r *MemoryRepository) Mutate(fn func(*Mutation) error) error {
 
 func cloneMutation(source state) *Mutation {
 	copied := state{
-		specimens: make(map[string]domain.Specimen, len(source.specimens)),
-		plans:     make(map[string]domain.PrepPlan, len(source.plans)),
-		progress:  make(map[string][]domain.ProgressEntry, len(source.progress)),
-		releases:  make(map[string]domain.ReleaseRecord, len(source.releases)),
+		specimens:  make(map[string]domain.Specimen, len(source.specimens)),
+		plans:      make(map[string]domain.PrepPlan, len(source.plans)),
+		admissions: make(map[string]domain.PlanAdmission, len(source.admissions)),
+		progress:   make(map[string][]domain.ProgressEntry, len(source.progress)),
+		releases:   make(map[string]domain.ReleaseRecord, len(source.releases)),
 	}
 	for key, value := range source.specimens {
 		copied.specimens[key] = value
@@ -61,17 +67,24 @@ func cloneMutation(source state) *Mutation {
 	for key, value := range source.plans {
 		copied.plans[key] = value
 	}
+	for key, value := range source.admissions {
+		copied.admissions[key] = value
+	}
 	for key, values := range source.progress {
 		copied.progress[key] = append([]domain.ProgressEntry(nil), values...)
 	}
 	for key, value := range source.releases {
 		copied.releases[key] = value
 	}
-	return &Mutation{state: copied}
+	return &Mutation{
+		state:              copied,
+		deferredAdmissions: make(map[string]domain.PlanAdmission),
+	}
 }
 
 type Mutation struct {
-	state state
+	state              state
+	deferredAdmissions map[string]domain.PlanAdmission
 }
 
 func (m *Mutation) snapshot() state {
@@ -133,6 +146,20 @@ func (m *Mutation) ListPlansForSpecimen(specimenID string) []domain.PrepPlan {
 
 func (m *Mutation) PutPlan(value domain.PrepPlan) {
 	m.state.plans[value.ID] = value
+}
+
+func (m *Mutation) GetAdmission(planID string) (domain.PlanAdmission, bool) {
+	value, ok := m.state.admissions[planID]
+	return value, ok
+}
+
+func (m *Mutation) PutAdmission(value domain.PlanAdmission) {
+	m.state.admissions[value.PlanID] = value
+}
+
+func (m *Mutation) DeferAdmission(value domain.PlanAdmission) {
+	m.state.admissions[value.PlanID] = value
+	m.deferredAdmissions[value.PlanID] = value
 }
 
 func (m *Mutation) HasOpenPlan(specimenID string) bool {

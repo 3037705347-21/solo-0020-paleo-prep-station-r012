@@ -21,6 +21,7 @@ type ProgressEntry struct {
 func NewProgressEntry(
 	id string,
 	plan PrepPlan,
+	admission PlanAdmission,
 	previous []ProgressEntry,
 	stage string,
 	percent int,
@@ -31,7 +32,7 @@ func NewProgressEntry(
 	if id == "" {
 		return ProgressEntry{}, contracts.Internal("missing_generated_id", "进度标识未生成", nil)
 	}
-	if plan.Status != PlanApproved && plan.Status != PlanActive {
+	if !admission.AllowsProgress(plan) {
 		return ProgressEntry{}, contracts.Conflict("plan_not_recordable", "当前方案状态不能追加制备进度")
 	}
 	if err := validatePercent(percent); err != nil {
