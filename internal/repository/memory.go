@@ -179,13 +179,37 @@ func (m *Mutation) AppendProgress(value domain.ProgressEntry) {
 	m.state.progress[value.PlanID] = append(m.state.progress[value.PlanID], value)
 }
 
-func (m *Mutation) ReleaseForSpecimen(specimenID string) (domain.ReleaseRecord, bool) {
+func (m *Mutation) CurrentReleaseForSpecimen(specimenID string) (domain.ReleaseRecord, bool) {
+	var current domain.ReleaseRecord
+	found := false
+	for _, value := range m.state.releases {
+		if value.SpecimenID != specimenID || !value.IsCurrent() {
+			continue
+		}
+		if !found || value.CreatedAt.After(current.CreatedAt) ||
+			(value.CreatedAt.Equal(current.CreatedAt) && value.ID > current.ID) {
+			current = value
+		}
+		found = true
+	}
+	return current, found
+}
+
+// ListReleasesForSpecimen 返回一份标本的完整放行轨迹（含已撤销记录），按时间先后排序。
+func (m *Mutation) ListReleasesForSpecimen(specimenID string) []domain.ReleaseRecord {
+	values := make([]domain.ReleaseRecord, 0)
 	for _, value := range m.state.releases {
 		if value.SpecimenID == specimenID {
-			return value, true
+			values = append(values, value)
 		}
 	}
-	return domain.ReleaseRecord{}, false
+	sort.Slice(values, func(i, j int) bool {
+		if values[i].CreatedAt.Equal(values[j].CreatedAt) {
+			return values[i].ID < values[j].ID
+		}
+		return values[i].CreatedAt.Before(values[j].CreatedAt)
+	})
+	return values
 }
 
 func (m *Mutation) PutRelease(value domain.ReleaseRecord) {

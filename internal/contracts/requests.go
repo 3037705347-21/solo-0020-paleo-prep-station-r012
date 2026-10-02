@@ -31,3 +31,10 @@ type ReleaseRequest struct {
 	Recipient  string `json:"recipient"`
 	ApprovedBy string `json:"approved_by"`
 }
+
+type ReleaseRevocationRequest struct {
+	// ReleaseID 可选，用于明确针对当前有效放行；传入非当前放行则冲突失败。
+	ReleaseID string `json:"release_id"`
+	Reason    string `json:"reason"`
+	RevokedBy string `json:"revoked_by"`
+}

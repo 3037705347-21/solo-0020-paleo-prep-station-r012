@@ -13,6 +13,11 @@ type ReleaseRecord struct {
 	Recipient  string    `json:"recipient"`
 	ApprovedBy string    `json:"approved_by"`
 	CreatedAt  time.Time `json:"created_at"`
+
+	// 撤销事实只在原记录上追加，记录本身永不删除，以保留完整追溯轨迹。
+	RevokedAt *time.Time `json:"revoked_at,omitempty"`
+	RevokedBy string     `json:"revoked_by,omitempty"`
+	Reason    string     `json:"reason,omitempty"`
 }
 
 func NewReleaseRecord(
@@ -49,4 +54,30 @@ func NewReleaseRecord(
 		ApprovedBy: approver,
 		CreatedAt:  now.UTC(),
 	}, nil
+}
+
+// IsCurrent 表示该放行仍然有效，尚未被撤销。
+func (r ReleaseRecord) IsCurrent() bool {
+	return r.RevokedAt == nil
+}
+
+// Revoke 在保留原放行事实的前提下追加撤销原因、操作人和时间。
+// 已撤销的记录不能再次撤销。
+func (r *ReleaseRecord) Revoke(reason string, revokedBy string, now time.Time) error {
+	if !r.IsCurrent() {
+		return contracts.Conflict("release_already_revoked", "该放行已经撤销，不能重复撤销")
+	}
+	reasonValue, err := requiredText("撤销原因", reason, 200)
+	if err != nil {
+		return err
+	}
+	operator, err := requiredText("撤销操作人", revokedBy, 80)
+	if err != nil {
+		return err
+	}
+	stamp := now.UTC()
+	r.RevokedAt = &stamp
+	r.RevokedBy = operator
+	r.Reason = reasonValue
+	return nil
 }

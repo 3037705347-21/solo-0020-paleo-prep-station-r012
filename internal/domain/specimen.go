@@ -131,3 +131,16 @@ func (s *Specimen) MarkAvailable(now time.Time) error {
 	s.UpdatedAt = now.UTC()
 	return nil
 }
+
+// RevokeAvailability 是放行撤销的补偿转换：标本从可借阅回到已稳定。
+// 撤销后标本不再是 available，因而不能再被视为可借阅；
+// 若要再次借阅，必须重新走放行并再次满足稳定、方案闭合与唯一放行条件。
+func (s *Specimen) RevokeAvailability(now time.Time) error {
+	if s.Status != SpecimenAvailable {
+		return contracts.Conflict("specimen_not_available", "只有处于可借阅状态的标本可以撤销放行")
+	}
+	s.Status = SpecimenStabilized
+	s.Version++
+	s.UpdatedAt = now.UTC()
+	return nil
+}

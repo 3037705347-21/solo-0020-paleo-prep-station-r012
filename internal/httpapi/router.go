@@ -20,6 +20,8 @@ func NewRouter(service *station.Service) http.Handler {
 	mux.HandleFunc("GET /specimens/{id}/plans", api.listPlansForSpecimen)
 	mux.HandleFunc("POST /specimens/{id}/plans", api.createPlan)
 	mux.HandleFunc("POST /specimens/{id}/release", api.releaseSpecimen)
+	mux.HandleFunc("POST /specimens/{id}/release/revocation", api.revokeRelease)
+	mux.HandleFunc("GET /specimens/{id}/releases", api.listReleases)
 	mux.HandleFunc("GET /plans/{id}", api.getPlan)
 	mux.HandleFunc("POST /plans/{id}/approval", api.approvePlan)
 	mux.HandleFunc("POST /plans/{id}/progress", api.logProgress)
