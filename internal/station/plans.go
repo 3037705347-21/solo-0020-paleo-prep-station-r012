@@ -26,9 +26,20 @@ func (s *Service) CreatePlan(
 		if m.HasOpenPlan(specimenID) {
 			return contracts.Conflict("open_plan_exists", "该标本已存在未结束的修复方案")
 		}
+		rework := specimen.CanPlanRework()
+		if rework {
+			// A stabilized specimen may only re-enter preparation after its
+			// latest release has been withdrawn; without release history the
+			// original one-way preparation invariant still holds.
+			history := m.ReleasesForSpecimen(specimenID)
+			if len(history) == 0 || history[len(history)-1].IsActive() {
+				return contracts.Conflict("specimen_not_reworkable", "只有放行撤销后的稳定标本才能重新建立修复方案")
+			}
+		}
 		plan, err := domain.NewPrepPlan(
 			s.nextID("plan"),
 			specimen,
+			rework,
 			request.Objective,
 			request.Method,
 			request.Adhesive,
@@ -39,8 +50,14 @@ func (s *Service) CreatePlan(
 			return err
 		}
 		admission := domain.NewPlanAdmission(plan, true)
-		if err := specimen.MarkPlanned(s.now()); err != nil {
-			return err
+		if rework {
+			if err := specimen.MarkReworkPlanned(s.now()); err != nil {
+				return err
+			}
+		} else {
+			if err := specimen.MarkPlanned(s.now()); err != nil {
+				return err
+			}
 		}
 		m.PutPlan(plan)
 		m.PutAdmission(admission)

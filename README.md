@@ -32,6 +32,8 @@ go run ./cmd/paleo-prep-station --addr 127.0.0.1:18133
 - `POST /plans/{id}/approval`
 - `POST /plans/{id}/progress`
 - `POST /specimens/{id}/release`
+- `POST /specimens/{id}/release/revocation`
+- `GET /specimens/{id}/releases`
 
 ## 本地验证
 
@@ -42,9 +44,22 @@ go run ./cmd/workflowcheck --workflow register-specimen
 go run ./cmd/workflowcheck --workflow approve-prep-plan
 go run ./cmd/workflowcheck --workflow log-preparation
 go run ./cmd/workflowcheck --workflow release-for-study
+go run ./cmd/workflowcheck --workflow revoke-release
 ```
 
 这些检查会启动临时 HTTP 处理器并调用真实公共路由。
+
+## 撤销研究放行
+
+当接收方取消借阅、运输损坏或研究计划撤销时，标本管理员可以对最新的有效放行提交撤销，请求体包含 `release_id`（可省略，默认撤销最新一条）、`reason` 和 `revoked_by`：
+
+```bash
+curl -X POST 127.0.0.1:18133/specimens/<id>/release/revocation \
+  -H 'Content-Type: application/json' \
+  -d '{"release_id":"release-xxxx","reason":"接收方取消借阅","revoked_by":"keeper-zhou"}'
+```
+
+撤销成功后标本回到 `stabilized`，不再可借阅；原放行记录保留全部原字段并新增 `status=revoked`、撤销原因、操作人和时间。`GET /specimens/{id}/releases` 可读取完整历史。撤销后必须重新建立并完成一轮修复方案，才能按原有条件重新放行。重复撤销、未知标本或放行、非最新放行以及存在未结束方案时返回 `409`/`404` 且不改变实体状态。
 
 ## 环境变量
 

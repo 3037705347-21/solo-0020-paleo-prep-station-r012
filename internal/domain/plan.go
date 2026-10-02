@@ -89,6 +89,7 @@ func (a *PlanAdmission) ConsumeAttempt() {
 func NewPrepPlan(
 	id string,
 	specimen Specimen,
+	rework bool,
 	objective string,
 	method string,
 	adhesive string,
@@ -98,7 +99,11 @@ func NewPrepPlan(
 	if id == "" {
 		return PrepPlan{}, contracts.Internal("missing_generated_id", "方案标识未生成", nil)
 	}
-	if !specimen.CanCreatePlan() {
+	if rework {
+		if !specimen.CanPlanRework() {
+			return PrepPlan{}, contracts.Conflict("specimen_not_reworkable", "只有放行撤销后的稳定标本才能重新建立修复方案")
+		}
+	} else if !specimen.CanCreatePlan() {
 		return PrepPlan{}, contracts.Conflict("specimen_not_plannable", "当前标本状态不能创建修复方案")
 	}
 	goal, err := requiredText("修复目标", objective, 200)

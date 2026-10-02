@@ -83,6 +83,13 @@ func (s Specimen) IsStable() bool {
 	return s.Status == SpecimenStabilized
 }
 
+// CanPlanRework applies only to a stabilized specimen whose released history
+// has been revoked: re-issuing the release must still satisfy stability and a
+// closed plan, so the specimen has to travel preparation again.
+func (s Specimen) CanPlanRework() bool {
+	return s.Status == SpecimenStabilized
+}
+
 func (s *Specimen) MarkPlanned(now time.Time) error {
 	if s.Status == SpecimenPlanned {
 		return nil
@@ -127,6 +134,32 @@ func (s *Specimen) MarkAvailable(now time.Time) error {
 		return contracts.Conflict("specimen_not_releasable", "只有已稳定标本可以办理放行")
 	}
 	s.Status = SpecimenAvailable
+	s.Version++
+	s.UpdatedAt = now.UTC()
+	return nil
+}
+
+// MarkReworkPlanned starts another preparation round for a stabilized specimen
+// whose latest release has been revoked. The station layer additionally
+// requires the revoked release history before calling this transition.
+func (s *Specimen) MarkReworkPlanned(now time.Time) error {
+	if s.Status != SpecimenStabilized {
+		return contracts.Conflict("specimen_not_reworkable", "只有放行撤销后的稳定标本才能重新建立修复方案")
+	}
+	s.Status = SpecimenPlanned
+	s.Version++
+	s.UpdatedAt = now.UTC()
+	return nil
+}
+
+// RevokeAvailable is the compensating transition of MarkAvailable: after a
+// release withdrawal the specimen returns to stabilized and is no longer
+// borrowable. The original release record is preserved by the station layer.
+func (s *Specimen) RevokeAvailable(now time.Time) error {
+	if s.Status != SpecimenAvailable {
+		return contracts.Conflict("specimen_not_available", "只有已放行标本可以撤销放行")
+	}
+	s.Status = SpecimenStabilized
 	s.Version++
 	s.UpdatedAt = now.UTC()
 	return nil

@@ -128,6 +128,28 @@
         "repository",
         "contracts"
       ]
+    },
+    {
+      "id": "revoke-release",
+      "name": "Revoke release for study",
+      "entry": "POST /specimens/{id}/release/revocation",
+      "steps": [
+        "verify the specimen exists and has no unfinished plan",
+        "verify the referenced release is the latest active record",
+        "write reason, operator and time onto the retained record and return the specimen to stabilized"
+      ],
+      "success": "returns the revoked record; the specimen is no longer borrowable and the full release history stays readable",
+      "failure": "returns 404 for an unknown specimen or release, and 409 for a duplicate, non-current, or open-plan revocation",
+      "verification": "workflowcheck revokes the current release, rejects every illegal revocation, then runs a fresh repair and re-release",
+      "module_ids": [
+        "entrypoint",
+        "runtimecheck",
+        "httpapi",
+        "station",
+        "domain",
+        "repository",
+        "contracts"
+      ]
     }
   ],
   "complexity": {

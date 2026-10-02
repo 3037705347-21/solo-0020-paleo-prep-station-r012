@@ -179,13 +179,39 @@ func (m *Mutation) AppendProgress(value domain.ProgressEntry) {
 	m.state.progress[value.PlanID] = append(m.state.progress[value.PlanID], value)
 }
 
-func (m *Mutation) ReleaseForSpecimen(specimenID string) (domain.ReleaseRecord, bool) {
+func (m *Mutation) GetRelease(id string) (domain.ReleaseRecord, bool) {
+	value, ok := m.state.releases[id]
+	return value, ok
+}
+
+// ActiveReleaseForSpecimen returns the single release that currently makes the
+// specimen borrowable. Revoked records are history and do not block a new
+// release.
+func (m *Mutation) ActiveReleaseForSpecimen(specimenID string) (domain.ReleaseRecord, bool) {
 	for _, value := range m.state.releases {
-		if value.SpecimenID == specimenID {
+		if value.SpecimenID == specimenID && value.IsActive() {
 			return value, true
 		}
 	}
 	return domain.ReleaseRecord{}, false
+}
+
+// ReleasesForSpecimen returns the complete, never-deleted release history in
+// creation order, with the latest record last.
+func (m *Mutation) ReleasesForSpecimen(specimenID string) []domain.ReleaseRecord {
+	values := make([]domain.ReleaseRecord, 0)
+	for _, value := range m.state.releases {
+		if value.SpecimenID == specimenID {
+			values = append(values, value)
+		}
+	}
+	sort.Slice(values, func(i, j int) bool {
+		if values[i].CreatedAt.Equal(values[j].CreatedAt) {
+			return values[i].ID < values[j].ID
+		}
+		return values[i].CreatedAt.Before(values[j].CreatedAt)
+	})
+	return values
 }
 
 func (m *Mutation) PutRelease(value domain.ReleaseRecord) {
